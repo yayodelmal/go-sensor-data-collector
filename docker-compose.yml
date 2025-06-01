@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  # --------------------------------------------------------------------------
+  # 1) Base de datos: TimescaleDB (PostgreSQL + extensión TSDB)
+  # --------------------------------------------------------------------------
+  timescaledb:
+    image: timescale/timescaledb:latest-pg14
+    container_name: timescaledb
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: goapp
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: sensors
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./sql/init-timescaledb.sql:/docker-entrypoint-initdb.d/init-timescaledb.sql:ro
+    ports:
+      - "5432:5432"
+
+  # --------------------------------------------------------------------------
+  # 2) Microservicio Go enfocado en SHT31
+  # --------------------------------------------------------------------------
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file: 
+      - .env
+    container_name: go-sensor-data-collector
+    depends_on:
+      - timescaledb
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+
+volumes:
+  db_data:
+    name: go_sensors_db_data

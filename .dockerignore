@@ -1,0 +1,27 @@
+# Sistemas de control de versiones
+.git
+.gitignore
+
+# Variables de entorno locales
+.env
+.env.example
+
+# Archivos de configuración de Docker Compose (no necesarios en la imagen)
+docker-compose.yml
+docker-compose.override.yml
+
+# Archivos de documentación
+README.md
+
+# Archivos temporales y de IDE
+.DS_Store
+.vscode/
+.idea/
+
+# Binaries y artefactos de compilación local
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+build/
