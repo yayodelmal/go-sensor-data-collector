@@ -8,6 +8,7 @@ import (
 	"github.com/yayodelmal/go-sensor-data-collector/internal/db"
 	"github.com/yayodelmal/go-sensor-data-collector/internal/handlers"
 	"github.com/yayodelmal/go-sensor-data-collector/internal/middleware"
+	"github.com/yayodelmal/go-sensor-data-collector/internal/repository"
 )
 
 func main() {
@@ -20,26 +21,37 @@ func main() {
 	// 1) Conectar a TimescaleDB
 	db.Init(cfg.DatabaseURL)
 
-	// 2) Crear router Gin
+	// 2) Crear repositorios con inyección de dependencias
+	sht31Repo := repository.NewSHT31Repository(db.DB)
+	ds18b20Repo := repository.NewDS18B20Repository(db.DB)
+
+	// 3) Crear handlers con repositorios inyectados
+	sht31Handler := handlers.NewSHT31Handler(sht31Repo)
+	ds18b20Handler := handlers.NewDS18B20Handler(ds18b20Repo)
+
+	// 4) Crear router Gin
 	router := gin.Default()
 
-	// 3) Autenticación opcional
+	// 5) Health check endpoint (sin autenticación)
+	router.GET("/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{"status": "healthy"})
+	})
+
+	// 6) Grupo de rutas bajo /sensor con autenticación opcional
+	apiGroup := router.Group("/sensor")
+
+	// Aplicar middleware solo al grupo /sensor si hay API_TOKEN
 	if cfg.APIToken != "" {
-		log.Println("[main] API_TOKEN detected → enabling auth middleware")
-		router.Use(middleware.AuthMiddleware())
+		log.Println("[main] API_TOKEN detected → enabling auth middleware for /sensor routes")
+		apiGroup.Use(middleware.AuthMiddleware())
 	} else {
-		log.Println("[main] No API_TOKEN found → endpoints are unprotected")
+		log.Println("[main] No API_TOKEN found → /sensor endpoints are unprotected")
 	}
 
-	// 4) Grupo de rutas bajo /sensor
-	apiGroup := router.Group("/sensor")
-	apiGroup.GET("/", func(c *gin.Context) {
-		c.JSON(200, gin.H{"message": "go-sensor-data-collector is up"})
-	})
-	handlers.RegisterSHT31Routes(apiGroup)
-	handlers.RegisterDS18B20Routes(apiGroup)
+	sht31Handler.RegisterRoutes(apiGroup)
+	ds18b20Handler.RegisterRoutes(apiGroup)
 
-	// 5) Arrancar servidor
+	// 8) Arrancar servidor
 	log.Printf("[main] starting server on :%s …", cfg.Port)
 	if err := router.Run(":" + cfg.Port); err != nil {
 		log.Fatalf("[main] failed to run server: %v", err)

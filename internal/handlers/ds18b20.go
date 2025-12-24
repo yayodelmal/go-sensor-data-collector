@@ -4,22 +4,32 @@ import (
     "net/http"
 
     "github.com/gin-gonic/gin"
-    "github.com/yayodelmal/go-sensor-data-collector/internal/db"
     "github.com/yayodelmal/go-sensor-data-collector/internal/models"
+    "github.com/yayodelmal/go-sensor-data-collector/internal/repository"
 )
+
+// DS18B20Handler maneja las peticiones HTTP para el sensor DS18B20
+type DS18B20Handler struct {
+    repo *repository.DS18B20Repository
+}
+
+// NewDS18B20Handler crea una nueva instancia del handler con el repositorio inyectado
+func NewDS18B20Handler(repo *repository.DS18B20Repository) *DS18B20Handler {
+    return &DS18B20Handler{repo: repo}
+}
 
 // DS18B20Payload define la estructura JSON que esperamos en POST /sensor/ds18b20
 type DS18B20Payload struct {
     Temperature float64 `json:"temperature" binding:"required"`
 }
 
-// RegisterDS18B20Routes asocia el handler al router group correspondiente.
-func RegisterDS18B20Routes(rg *gin.RouterGroup) {
-    rg.POST("/ds18b20", postDS18B20)
+// RegisterRoutes asocia el handler al router group correspondiente
+func (h *DS18B20Handler) RegisterRoutes(rg *gin.RouterGroup) {
+    rg.POST("/ds18b20", h.PostReading)
 }
 
-// postDS18B20 procesa POST /sensor/ds18b20
-func postDS18B20(c *gin.Context) {
+// PostReading procesa POST /sensor/ds18b20
+func (h *DS18B20Handler) PostReading(c *gin.Context) {
     var payload DS18B20Payload
     if err := c.ShouldBindJSON(&payload); err != nil {
         c.JSON(http.StatusBadRequest, gin.H{
@@ -34,7 +44,7 @@ func postDS18B20(c *gin.Context) {
         // TS se omite: la DB usará DEFAULT now()
     }
 
-    if err := db.DB.Create(&reading).Error; err != nil {
+    if err := h.repo.Create(c.Request.Context(), &reading); err != nil {
         c.JSON(http.StatusInternalServerError, gin.H{
             "error":  "could not save DS18B20 reading",
             "detail": err.Error(),

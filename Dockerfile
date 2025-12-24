@@ -18,15 +18,17 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /go-sensor-data-collector ./cmd/server
 
 # ------------------------------------------------------------------------------
-# Etapa 2: Imagen mínima (scratch)
+# Etapa 2: Imagen mínima (alpine para health checks)
 # ------------------------------------------------------------------------------
-FROM scratch
+FROM alpine:latest
 
-# Omitir certificados si tu servicio Go no hace HTTPS outbound.
-# Para HTTPS: en builder instalar ca-certificates y copiar aquí
-# COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+# Instalar wget para health checks
+RUN apk add --no-cache wget ca-certificates
 
-USER 1000:1000
+# Crear usuario no-root
+RUN addgroup -g 1000 appuser && adduser -D -u 1000 -G appuser appuser
+
+USER appuser
 WORKDIR /app
 
 COPY --from=builder /go-sensor-data-collector /go-sensor-data-collector

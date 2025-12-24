@@ -1,40 +1,49 @@
-# go-sensor-data-collector
+# 🌡️ go-sensor-data-collector
 
 A lightweight Go microservice that exposes HTTP endpoints to receive and persist sensor readings (SHT31 and DS18B20) into TimescaleDB. Each sensor has its own dedicated POST route under `/sensor`. Timestamp (`ts`) is assigned automatically by the database with `DEFAULT now()`.
 
 ---
 
-## Features
+## ✨ Features
 
-* **Dedicated endpoints**
+- 🔌 **Dedicated endpoints**
 
-  * `POST /sensor/sht31` for SHT31 (temperature + humidity)
-  * `POST /sensor/ds18b20` for DS18B20 (temperature only)
+  - `POST /sensor/sht31` for SHT31 (temperature + humidity)
+  - `POST /sensor/ds18b20` for DS18B20 (temperature only)
+  - `GET /health` for health checks (no authentication required)
 
-* **Automatic timestamps**
+- 🏗️ **Repository Pattern Architecture**
 
-  * Database column `ts TIMESTAMPTZ NOT NULL DEFAULT now()` ensures each row is stamped on insert.
+  - Interface-based repository design for better testability
+  - Dependency injection for clean separation of concerns
+  - GORM with optimized connection pooling
 
-* **Token-based authentication (optional)**
+- ⏱️ **Automatic timestamps**
 
-  * If `API_TOKEN` is set in the environment, all requests must include header `Authorization: Bearer <API_TOKEN>`.
+  - Database column `ts TIMESTAMPTZ NOT NULL DEFAULT now()` ensures each row is stamped on insert.
 
-* **Dockerized**
+- 🔐 **Token-based authentication (optional)**
 
-  * Multi-stage `Dockerfile` produces a minimal static binary (`scratch` or Distroless).
-  * `docker-compose.yml` brings up TimescaleDB and the Go service together.
+  - If `API_TOKEN` is set in the environment, `/sensor/*` routes require `Authorization: Bearer <API_TOKEN>`
+  - Health check endpoint remains public for monitoring
+
+- 🐳 **Dockerized with Health Checks**
+  - Multi-stage `Dockerfile` produces a minimal Alpine-based image
+  - `docker-compose.yml` brings up TimescaleDB and the Go service with health monitoring
+  - Environment variables managed via `.env` file
 
 ---
 
-## Prerequisites
+## 📋 Prerequisites
 
-* Docker ≥ 20.10
-* Docker Compose ≥ 1.29
-* (Optional) `psql` client, if you want to query the database from your host
+- Docker ≥ 20.10 or Podman ≥ 4.0
+- Docker Compose ≥ 1.29 or podman-compose
+- (Optional) `psql` client, if you want to query the database from your host
+- (Optional) [Bruno](https://www.usebruno.com/) for API testing
 
 ---
 
-## Getting Started
+## 🚀 Getting Started
 
 1. **Clone the repository**
 
@@ -43,83 +52,135 @@ A lightweight Go microservice that exposes HTTP endpoints to receive and persist
    cd go-sensor-data-collector
    ```
 
-2. **Build and start services with Docker Compose**
+2. **Configure environment variables**
+
+   ```bash
+   cp .env.example .env
+   # Edit .env with your preferred values
+   ```
+
+   Key variables:
+
+   - `PORT` - Application port (default: 3000)
+   - `API_TOKEN` - Optional Bearer token for authentication
+   - `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` - Database credentials
+   - `DATABASE_URL` - Full PostgreSQL connection string
+
+3. **Build and start services with Docker Compose**
+
+   Using Docker:
 
    ```bash
    docker-compose up -d --build
    ```
 
+   Using Podman:
+
+   ```bash
+   podman-compose up -d --build
+   ```
+
    This will spin up:
 
-   * **TimescaleDB** (`timescaledb:latest-pg14`), with an init script that creates two hypertables:
+   - **TimescaleDB** (`timescaledb:latest-pg14`), with an init script that creates two hypertables:
+     - `sht31_readings (id, temperature, humidity, ts)`
+     - `ds18b20_readings (id, temperature, ts)`
+   - **Go microservice** (`go-sensor-data-collector`), listening on port 3000 (default).
 
-     * `sht31_readings (id, temperature, humidity, ts)`
-     * `ds18b20_readings (id, temperature, ts)`
-   * **Go microservice** (`go-sensor-data-collector`), listening on port 5000.
+   Both services include health checks:
 
-3. **Verify both containers are running**
+   - TimescaleDB: `pg_isready` check every 5 seconds
+   - App: `/health` endpoint check every 10 seconds with 40s startup grace period
+
+4. **Verify both containers are running**
+
+   Using Docker:
 
    ```bash
    docker-compose ps
    ```
 
-   You should see `timescaledb` and `go-sensor-data-collector` in the “Up” state.
+   Using Podman:
+
+   ```bash
+   podman-compose ps
+   ```
+
+   You should see both services in the "Up (healthy)" state.
 
 ---
 
-## Environment Variables
+## ⚙️ Environment Variables
 
-The Go service reads the following variables at runtime:
+All environment variables are configured in the `.env` file:
 
-* `DATABASE_URL`
-  Full PostgreSQL connection string. Defaults to:
+### Application Variables
 
+- `PORT` (default: `3000`)
+  Port on which the Go HTTP server listens.
+
+- `API_TOKEN` (optional)
+  If set, the service requires `/sensor/*` endpoints to include:
+  ```
+  Authorization: Bearer <API_TOKEN>
+  ```
+  If `API_TOKEN` is empty or unset, sensor endpoints are public.
+  Note: `/health` endpoint is always public.
+
+### Database Variables
+
+- `POSTGRES_USER` (default: `goapp`)
+  PostgreSQL username for TimescaleDB.
+
+- `POSTGRES_PASSWORD` (default: `secret`)
+  PostgreSQL password for TimescaleDB.
+
+- `POSTGRES_DB` (default: `sensors`)
+  PostgreSQL database name.
+
+- `POSTGRES_PORT` (default: `5432`)
+  PostgreSQL port.
+
+- `DATABASE_URL`
+  Full PostgreSQL connection string. Example:
   ```
   host=timescaledb user=goapp password=secret dbname=sensors port=5432 sslmode=disable TimeZone=UTC
   ```
 
-  (Matches the `docker-compose.yml` service `timescaledb` settings.)
-
-* `API_TOKEN` (optional)
-  If set, the service requires every request to include:
-
-  ```
-  Authorization: Bearer <API_TOKEN>
-  ```
-
-  If `API_TOKEN` is empty or unset, all endpoints are public.
-
-* `PORT` (optional)
-  Port on which the Go HTTP server listens. Defaults to `5000`.
+These variables are automatically injected into both `docker-compose.yml` services.
 
 ---
 
-## API Endpoints
+## 📡 API Endpoints
 
-### Health-check
+### 💚 Health Check
 
 ```
-GET /sensor/
+GET /health
 ```
+
+**No authentication required** - This endpoint is public for health monitoring.
 
 Returns:
 
 ```json
-{ "message": "go-sensor-data-collector is up" }
+{
+  "status": "healthy"
+}
 ```
 
 ### POST /sensor/sht31
 
-* **URL:** `/sensor/sht31`
+- **URL:** `/sensor/sht31`
 
-* **Method:** `POST`
+- **Method:** `POST`
 
-* **Headers:**
+- **Headers:**
 
-  * `Content-Type: application/json`
-  * `Authorization: Bearer <API_TOKEN>` (if `API_TOKEN` is set)
+  - `Content-Type: application/json`
+  - `Authorization: Bearer <API_TOKEN>` (if `API_TOKEN` is set)
 
-* **Request Body:**
+- **Request Body:**
 
   ```json
   {
@@ -130,7 +191,7 @@ Returns:
 
   Both `temperature` and `humidity` are required.
 
-* **Response (201 Created):**
+- **Response (201 Created):**
 
   ```json
   {
@@ -144,26 +205,26 @@ Returns:
   }
   ```
 
-  * The `datetime` field is the `ts` column assigned by the database.
+  - The `datetime` field is the `ts` column assigned by the database.
 
-* **Error Responses:**
+- **Error Responses:**
 
-  * `400 Bad Request` if JSON is invalid or missing required fields.
-  * `401 Unauthorized` if `API_TOKEN` is set and the header is missing/invalid.
-  * `500 Internal Server Error` on database errors.
+  - `400 Bad Request` if JSON is invalid or missing required fields.
+  - `401 Unauthorized` if `API_TOKEN` is set and the header is missing/invalid.
+  - `500 Internal Server Error` on database errors.
 
 ### POST /sensor/ds18b20
 
-* **URL:** `/sensor/ds18b20`
+- **URL:** `/sensor/ds18b20`
 
-* **Method:** `POST`
+- **Method:** `POST`
 
-* **Headers:**
+- **Headers:**
 
-  * `Content-Type: application/json`
-  * `Authorization: Bearer <API_TOKEN>` (if `API_TOKEN` is set)
+  - `Content-Type: application/json`
+  - `Authorization: Bearer <API_TOKEN>` (if `API_TOKEN` is set)
 
-* **Request Body:**
+- **Request Body:**
 
   ```json
   {
@@ -173,7 +234,7 @@ Returns:
 
   `temperature` is required; `humidity` is omitted, since DS18B20 does not supply humidity.
 
-* **Response (201 Created):**
+- **Response (201 Created):**
 
   ```json
   {
@@ -186,15 +247,15 @@ Returns:
   }
   ```
 
-* **Error Responses:**
+- **Error Responses:**
 
-  * `400 Bad Request` if JSON is invalid or missing `temperature`.
-  * `401 Unauthorized` if `API_TOKEN` is set and the header is missing/invalid.
-  * `500 Internal Server Error` on database errors.
+  - `400 Bad Request` if JSON is invalid or missing `temperature`.
+  - `401 Unauthorized` if `API_TOKEN` is set and the header is missing/invalid.
+  - `500 Internal Server Error` on database errors.
 
 ---
 
-## Database Schema (TimescaleDB)
+## 🗄️ Database Schema (TimescaleDB)
 
 The init script at `sql/init-timescaledb.sql` runs automatically on container startup:
 
@@ -217,74 +278,156 @@ CREATE TABLE IF NOT EXISTS ds18b20_readings (
 SELECT create_hypertable('ds18b20_readings', 'ts', if_not_exists => TRUE);
 ```
 
-* **`ts TIMESTAMPTZ NOT NULL DEFAULT now()`** ensures the database stamps each row with the server’s current time.
-* Both tables are converted into TimescaleDB hypertables for efficient time-series storage and partitioning.
+- **`ts TIMESTAMPTZ NOT NULL DEFAULT now()`** ensures the database stamps each row with the server’s current time.
+- Both tables are converted into TimescaleDB hypertables for efficient time-series storage and partitioning.
 
 ---
 
-## Folder Structure
+## 📁 Folder Structure
 
 ```
 go-sensor-data-collector/
+├── bruno/                          # Bruno API collection for testing
+│   ├── bruno.json                  # Collection configuration
+│   ├── environments/
+│   │   └── Local.bru               # Local environment variables
+│   ├── Health Check.bru            # GET /health request
+│   ├── POST SHT31 Reading.bru      # POST /sensor/sht31 request
+│   └── POST DS18B20 Reading.bru    # POST /sensor/ds18b20 request
 ├── cmd/
 │   └── server/
-│       └── main.go          # Application entrypoint: sets up router, middleware, and handlers
+│       └── main.go                 # Application entrypoint: DI, router, middleware
 ├── internal/
+│   ├── config/
+│   │   └── config.go               # Viper-based configuration loader
 │   ├── db/
-│   │   └── postgres.go      # DB initialization (GORM + Postgres)
+│   │   └── postgres.go             # DB initialization with connection pooling
 │   ├── handlers/
-│   │   ├── sht31.go         # Handler for POST /sensor/sht31
-│   │   └── ds18b20.go       # Handler for POST /sensor/ds18b20
+│   │   ├── sht31.go                # SHT31 handler with repository injection
+│   │   └── ds18b20.go              # DS18B20 handler with repository injection
 │   ├── middleware/
-│   │   └── auth.go          # Optional token auth middleware
-│   └── models/
-│       ├── sht31.go         # GORM model for sht31_readings
-│       └── ds18b20.go       # GORM model for ds18b20_readings
-├── go.mod                   # Module definition and dependencies
+│   │   └── auth.go                 # Optional Bearer token auth middleware
+│   ├── models/
+│   │   ├── sht31.go                # GORM model for sht31_readings
+│   │   └── ds18b20.go              # GORM model for ds18b20_readings
+│   └── repository/
+│       ├── sensor_repository.go    # Repository interface definition
+│       ├── sht31_repository.go     # SHT31 repository implementation
+│       └── ds18b20_repository.go   # DS18B20 repository implementation
+├── sql/
+│   └── init-timescaledb.sql        # SQL script to create hypertables
+├── .env.example                    # Example environment variables
+├── .env                            # Your local environment variables (git-ignored)
+├── go.mod                          # Module definition and dependencies
 ├── go.sum
-├── Dockerfile               # Multi-stage Docker build for Go binary
-├── docker-compose.yml       # Orchestrates TimescaleDB + Go service
-└── sql/
-    └── init-timescaledb.sql # SQL script to create hypertables for SHT31 & DS18B20
+├── Dockerfile                      # Multi-stage Docker build (Alpine-based)
+└── docker-compose.yml              # Orchestrates TimescaleDB + Go service with health checks
 ```
 
 ---
 
-## Customization
+## 🧪 Testing with Bruno
 
-* **Protecting Endpoints:**
-  Set `API_TOKEN` in `docker-compose.yml` (or your environment). If unset, endpoints are public.
+A Bruno API collection is included in the `bruno/` directory for easy testing:
 
-* **Changing Ports:**
+1. **Install Bruno** from [usebruno.com](https://www.usebruno.com/)
+2. **Open the collection** by pointing Bruno to the `bruno/` folder
+3. **Configure environment** in `bruno/environments/Local.bru`:
+   - Set `base_url` (default: `http://localhost:3000`)
+   - Set `api_token` if using authentication
+4. **Run requests** to test your endpoints
 
-  * Modify `PORT` in `docker-compose.yml` or set it via environment.
-  * Adjust the `EXPOSE` instruction in `Dockerfile` if you use a different port.
+## 🏛️ Architecture
 
-* **Using Another Database:**
+### Repository Pattern
+
+The application uses an interface-based repository pattern:
+
+- **Interfaces** (`internal/repository/sensor_repository.go`) define contracts
+- **Implementations** (SHT31Repository, DS18B20Repository) handle data access
+- **Handlers** receive repositories via dependency injection
+- **Benefits**: Testability, separation of concerns, maintainability
+
+### Database Connection Pooling
+
+Optimized GORM configuration in `internal/db/postgres.go`:
+
+- Max idle connections: 10
+- Max open connections: 100
+- Connection max lifetime: 1 hour
+- Connection max idle time: 10 minutes
+- Prepared statements enabled for better performance
+
+## 🔧 Customization
+
+- **Protecting Endpoints:**
+  Set `API_TOKEN` in `.env` file. If unset, sensor endpoints are public. Health check is always public.
+
+- **Changing Ports:**
+  Modify `PORT` in `.env` file. The docker-compose.yml will automatically use the new port.
+
+- **Using Another Database:**
   Replace `timescale/timescaledb:latest-pg14` with any PostgreSQL image. Remove hypertable logic if not using TimescaleDB.
 
 ---
 
-## Local Database Inspection
+## 🔍 Local Database Inspection
 
 1. **Via `psql` on host:**
 
    ```bash
    psql "host=localhost port=5432 user=goapp password=secret dbname=sensors sslmode=disable"
    ```
+
 2. **Via Docker Exec:**
 
    ```bash
    docker exec -it timescaledb psql -U goapp -d sensors
    ```
-3. **Example Query:**
+
+   Via Podman:
+
+   ```bash
+   podman exec -it timescaledb psql -U goapp -d sensors
+   ```
+
+3. **Example Queries:**
 
    ```sql
+   -- View latest SHT31 readings
    SELECT id, temperature, humidity, ts
    FROM sht31_readings
    ORDER BY ts DESC
    LIMIT 5;
+
+   -- View latest DS18B20 readings
+   SELECT id, temperature, ts
+   FROM ds18b20_readings
+   ORDER BY ts DESC
+   LIMIT 5;
+
+   -- Count total readings
+   SELECT
+     (SELECT COUNT(*) FROM sht31_readings) as sht31_count,
+     (SELECT COUNT(*) FROM ds18b20_readings) as ds18b20_count;
    ```
 
 ---
 
+## 💻 Development
+
+### Running Locally (without Docker)
+
+1. Ensure you have PostgreSQL/TimescaleDB running
+2. Copy `.env.example` to `.env` and configure `DATABASE_URL`
+3. Run the application:
+   ```bash
+   go run ./cmd/server
+   ```
+
+### Building
+
+```bash
+go build -o sensor-collector ./cmd/server
+./sensor-collector
+```

@@ -4,9 +4,19 @@ import (
     "net/http"
 
     "github.com/gin-gonic/gin"
-    "github.com/yayodelmal/go-sensor-data-collector/internal/db"
     "github.com/yayodelmal/go-sensor-data-collector/internal/models"
+    "github.com/yayodelmal/go-sensor-data-collector/internal/repository"
 )
+
+// SHT31Handler maneja las peticiones HTTP para el sensor SHT31
+type SHT31Handler struct {
+    repo *repository.SHT31Repository
+}
+
+// NewSHT31Handler crea una nueva instancia del handler con el repositorio inyectado
+func NewSHT31Handler(repo *repository.SHT31Repository) *SHT31Handler {
+    return &SHT31Handler{repo: repo}
+}
 
 // SHT31Payload define la estructura JSON que esperamos en POST /sensor/sht31
 type SHT31Payload struct {
@@ -14,13 +24,13 @@ type SHT31Payload struct {
     Humidity    float64 `json:"humidity" binding:"required"`
 }
 
-// RegisterSHT31Routes asocia el handler al router group correspondiente.
-func RegisterSHT31Routes(rg *gin.RouterGroup) {
-    rg.POST("/sht31", postSHT31)
+// RegisterRoutes asocia el handler al router group correspondiente
+func (h *SHT31Handler) RegisterRoutes(rg *gin.RouterGroup) {
+    rg.POST("/sht31", h.PostReading)
 }
 
-// postSHT31 procesa POST /sensor/sht31
-func postSHT31(c *gin.Context) {
+// PostReading procesa POST /sensor/sht31
+func (h *SHT31Handler) PostReading(c *gin.Context) {
     var payload SHT31Payload
     if err := c.ShouldBindJSON(&payload); err != nil {
         c.JSON(http.StatusBadRequest, gin.H{
@@ -36,7 +46,7 @@ func postSHT31(c *gin.Context) {
         // TS se omite: la DB usará DEFAULT now()
     }
 
-    if err := db.DB.Create(&reading).Error; err != nil {
+    if err := h.repo.Create(c.Request.Context(), &reading); err != nil {
         c.JSON(http.StatusInternalServerError, gin.H{
             "error":  "could not save SHT31 reading",
             "detail": err.Error(),

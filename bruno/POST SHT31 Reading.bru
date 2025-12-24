@@ -1,0 +1,22 @@
+meta {
+  name: POST SHT31 Reading
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/sensor/sht31
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{api_token}}
+}
+
+body:json {
+  {
+    "temperature": 22.5,
+    "humidity": 45.2
+  }
+}

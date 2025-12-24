@@ -1,0 +1,21 @@
+meta {
+  name: POST DS18B20 Reading
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{base_url}}/sensor/ds18b20
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{api_token}}
+}
+
+body:json {
+  {
+    "temperature": 23.1
+  }
+}
